@@ -3,7 +3,7 @@
     [AttributeUsage(AttributeTargets.Property)]
     internal sealed class LocatorAttribute(string locator) : Attribute
     {
-        internal enum SelectorType
+        internal enum LocatorType
         {
             Select,
             Input

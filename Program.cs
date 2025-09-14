@@ -36,7 +36,7 @@ namespace HattrickTransfersScraper
                     }
                 });
 
-                Helpers.RemoveDealPlayersFromProcessedFile(Helpers.GetTodaysDealPlayersFilePath());
+                Helpers.RemoveDealPlayersFromProcessedFile();
 
                 IPage page = await Helpers.LoginHattrickAsync(browser, settings.LoginName, settings.LoginPassword);
                 string subdomain = page.Url.Split('.')[0].Replace("https://", "");
@@ -52,7 +52,7 @@ namespace HattrickTransfersScraper
 
                 await browser.CloseAsync();
 
-                Helpers.DeduplicateCleanupAndSortDealsFile(Helpers.GetTodaysDealPlayersFilePath());
+                Helpers.DeduplicateCleanupAndSortDealsFile();
             }
             catch (Exception ex)
             {

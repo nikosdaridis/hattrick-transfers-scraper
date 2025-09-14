@@ -126,11 +126,8 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Checks if a player ID has already been processed
         /// </summary>
-        public static bool IsPlayerIdProcessed(string playerId)
-        {
-            ProcessedPlayers processed = LoadFileData<ProcessedPlayers>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, GetTodaysProcessedPlayersFilePath()));
-            return processed.Ids != null && processed.Ids.Contains(playerId);
-        }
+        public static bool IsPlayerIdProcessed(string playerId) =>
+            (LoadFileData<ProcessedPlayers>(GetTodaysProcessedPlayersFilePath())).Ids?.Contains(playerId) ?? false;
 
         /// <summary>
         /// Marks a player ID as processed and appends it to the file
@@ -140,15 +137,15 @@ namespace HattrickTransfersScraper
             if (string.IsNullOrWhiteSpace(playerId))
                 return;
 
-            ProcessedPlayers processed = LoadFileData<ProcessedPlayers>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, GetTodaysProcessedPlayersFilePath()));
+            ProcessedPlayers processed = LoadFileData<ProcessedPlayers>(GetTodaysProcessedPlayersFilePath());
             processed.Ids ??= [];
 
             if (processed.Ids.Add(playerId))
-                File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, GetTodaysProcessedPlayersFilePath()), JsonConvert.SerializeObject(processed, Formatting.Indented));
+                File.WriteAllText(GetTodaysProcessedPlayersFilePath(), JsonConvert.SerializeObject(processed, Formatting.Indented));
         }
 
         /// <summary>
-        /// Logs into Hattrick and returns the authenticated page
+        /// Logs into Hattrick and returns the logged-in page
         /// </summary>
         public static async Task<IPage> LoginHattrickAsync(IBrowser browser, string loginName, string password)
         {
@@ -163,17 +160,20 @@ namespace HattrickTransfersScraper
             });
 
             IPage page = await context.NewPageAsync();
-            await page.GotoAsync("https://hattrick.org/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+            await page.GotoAsync("https://hattrick.org/", new() { WaitUntil = WaitUntilState.NetworkIdle });
 
             ILocator cookiesRejectButton = page.Locator("button[data-cky-tag='reject-button']");
             await cookiesRejectButton.WaitForAsync(new() { State = WaitForSelectorState.Visible });
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             await cookiesRejectButton.ClickAsync();
 
             await page.ClickAsync("text=Log In");
             await page.FillAsync("input[id='inputLoginname']", loginName);
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             await page.FillAsync("input[id='inputPassword']", password);
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             await page.PressAsync("input[id='inputPassword']", "Enter");
-            await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+            await page.WaitForTimeoutAsync(Random.Shared.Next(2000, 4000));
 
             return page;
         }
@@ -183,11 +183,14 @@ namespace HattrickTransfersScraper
         /// </summary>
         public static async Task ApplyFilterAndSearchAsync(IPage page, SearchFilter filter, string subdomain)
         {
-            await page.GotoAsync($"https://{subdomain}.hattrick.org/World/Transfers/", new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded });
+            await page.GotoAsync($"https://{subdomain}.hattrick.org/World/Transfers/", new() { WaitUntil = WaitUntilState.DOMContentLoaded });
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
             ILocator clearFilterButton = page.Locator("a[id='ctl00_ctl00_CPContent_CPMain_butClear']");
             await clearFilterButton.WaitForAsync(new() { State = WaitForSelectorState.Visible });
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             await clearFilterButton.ClickAsync();
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
             foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -214,6 +217,7 @@ namespace HattrickTransfersScraper
 
             ILocator searchButton = page.Locator("#ctl00_ctl00_CPContent_CPMain_butSearch");
             await searchButton.WaitForAsync(new() { State = WaitForSelectorState.Visible });
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             await searchButton.ClickAsync();
         }
 
@@ -246,6 +250,7 @@ namespace HattrickTransfersScraper
             async Task CollectFromCurrentPage()
             {
                 await page.WaitForSelectorAsync("#ctl00_ctl00_CPContent_CPMain_ucPager2_divWrapper", new() { State = WaitForSelectorState.Visible });
+                await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
                 IReadOnlyList<ILocator> playersInfo = await page.Locator("div.transferPlayerInfo").AllAsync();
 
@@ -281,11 +286,16 @@ namespace HattrickTransfersScraper
         /// </summary>
         public static async Task ProcessPlayerAsync(IPage page, string subdomain, string playerLink, ILogger<Program> logger)
         {
-            await page.GotoAsync($"https://{subdomain}.hattrick.org/{playerLink}", new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded });
+            await page.GotoAsync($"https://{subdomain}.hattrick.org/{playerLink}", new() { WaitUntil = WaitUntilState.DOMContentLoaded });
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
-            string query = playerLink.Substring(playerLink.IndexOf('?') + 1);
+            string query = playerLink[(playerLink.IndexOf('?') + 1)..];
             string? playerId = HttpUtility.ParseQueryString(query)["playerId"];
             MarkPlayerIdAsProcessed(playerId);
+
+            ILocator injuryIcon = page.Locator("i.icon-injury");
+            if (await injuryIcon.CountAsync() > 0)
+                return;
 
             int price = await GetPlayerPriceAsync(page);
             DateTime? deadline = await GetPlayerDeadlineAsync(page);
@@ -298,7 +308,7 @@ namespace HattrickTransfersScraper
             if (await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").CountAsync() != 1)
             {
                 await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
-                await page.WaitForTimeoutAsync(Random.Shared.Next(200, 500));
+                await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
                 return;
             }
 
@@ -314,9 +324,9 @@ namespace HattrickTransfersScraper
             };
 
             if (medianValue > 20000 && price * scaleFactor < medianValue)
-                WriteToDealPlayersFile(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, GetTodaysDealPlayersFilePath()), playerId ?? string.Empty, deadline, price, medianValue);
+                AddPlayerToDealsFile(playerId, deadline, price, medianValue);
             else
-                CheckAndRemoveFromDeals(playerId);
+                RemovePlayerFromDealsFile(playerId);
         }
 
         /// <summary>
@@ -340,7 +350,7 @@ namespace HattrickTransfersScraper
             else
             {
                 await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
-                await page.WaitForTimeoutAsync(Random.Shared.Next(200, 500));
+                await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
                 return 0;
             }
         }
@@ -367,15 +377,17 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Deduplicates, cleans up expired deals and sorts the deals file by deadline
         /// </summary>
-        public static void DeduplicateCleanupAndSortDealsFile(string filePath)
+        public static void DeduplicateCleanupAndSortDealsFile()
         {
+            string filePath = GetTodaysDealPlayersFilePath();
+
             if (!File.Exists(filePath))
                 return;
 
             string[] json = File.ReadAllLines(filePath);
             DealPlayers dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(string.Join(Environment.NewLine, json)) ?? new();
 
-            Dictionary<string, (DateTime timestamp, DateTime deadline, string line)> playerMap = [];
+            Dictionary<string, (DateTime timestamp, DateTime deadline, string info)> playersMap = [];
 
             foreach (string playerInfo in dealPlayers.Info)
             {
@@ -389,17 +401,17 @@ namespace HattrickTransfersScraper
                     DateTime? deadline = ParseDeadline(deadlineMatch.Groups[1].Value);
                     DateTime? timestamp = ParseLogTime(timestampMatch.Groups[1].Value);
 
-                    if (deadline.HasValue && timestamp.HasValue && (deadline.Value > DateTime.Now))
-                        if (!playerMap.TryGetValue(playerId, out (DateTime deadline, DateTime timestamp, string line) existing) || timestamp.Value > existing.timestamp)
-                            playerMap[playerId] = (timestamp.Value, deadline.Value, playerInfo);
+                    if (deadline.HasValue && timestamp.HasValue && deadline.Value > DateTime.Now)
+                        if (!playersMap.TryGetValue(playerId, out (DateTime deadline, DateTime timestamp, string info) existing) || timestamp.Value > existing.timestamp)
+                            playersMap[playerId] = (timestamp.Value, deadline.Value, playerInfo);
                 }
             }
 
-            HashSet<string> sortedPlayers = [.. playerMap.Values.OrderBy(x => x.deadline).Select(x => x.line)];
+            HashSet<string> sortedPlayersInfo = [.. playersMap.Values.OrderBy(x => x.deadline).Select(x => x.info)];
 
-            File.WriteAllText(filePath, JsonConvert.SerializeObject(new DealPlayers { Info = sortedPlayers }, Formatting.Indented));
+            File.WriteAllText(filePath, JsonConvert.SerializeObject(new DealPlayers { Info = sortedPlayersInfo }, Formatting.Indented));
 
-            RemoveDealPlayersFromProcessedFile(filePath);
+            RemoveDealPlayersFromProcessedFile();
         }
 
         /// <summary>
@@ -423,78 +435,60 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Checks if a player ID is in today's deals file and removes it if found
         /// </summary>
-        public static void CheckAndRemoveFromDeals(string? playerId)
+        public static void RemovePlayerFromDealsFile(string? playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId))
                 return;
 
-            string dealsFilePath = GetTodaysDealPlayersFilePath();
-            if (!File.Exists(dealsFilePath))
-                return;
+            DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(GetTodaysDealPlayersFilePath()));
 
-            string[] lines = File.ReadAllLines(dealsFilePath);
-            bool playerFound = lines.Any(line => line.Contains($"playerId={playerId}"));
+            bool playerRemoved = dealPlayers?.Info.RemoveWhere(info => PlayerIdRegex().Match(info) is Match match && match.Success && match.Groups[1].Value == playerId) > 0;
 
-            if (playerFound)
-                RemovePlayerFromDealFile(dealsFilePath, playerId);
+            if (playerRemoved)
+                File.WriteAllText(GetTodaysDealPlayersFilePath(), JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
         }
 
         /// <summary>
-        /// Appends a new entry to the deal players file
+        /// Adds a player's deal info to today's deals file
         /// </summary>
-        public static void WriteToDealPlayersFile(string filePath, string playerId, DateTime? deadline, int price, int medianValue)
+        public static void AddPlayerToDealsFile(string? playerId, DateTime? deadline, int price, int medianValue)
         {
+            if (string.IsNullOrWhiteSpace(playerId) || !deadline.HasValue)
+                return;
+
+            string filePath = GetTodaysDealPlayersFilePath();
+
             DealPlayers dealPlayers = LoadFileData<DealPlayers>(filePath);
 
-            string entry = $"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price: {price:N0} | Median: {medianValue:N0} | Timestamp {DateTime.Now}";
-            dealPlayers.Info.Add(entry);
+            dealPlayers.Info.Add($"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price: {price:N0} | Median: {medianValue:N0} | Timestamp {DateTime.Now}");
 
             File.WriteAllText(filePath, JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
         }
 
         /// <summary>
-        /// Removes a specific player's entry from the deal players file
+        /// Removes players from today's processed file if they are present in today's deals file
         /// </summary>
-        public static void RemovePlayerFromDealFile(string filePath, string? playerId)
+        public static void RemoveDealPlayersFromProcessedFile()
         {
-            if (!File.Exists(filePath) || string.IsNullOrWhiteSpace(playerId))
+            string dealsFilePath = GetTodaysDealPlayersFilePath();
+
+            DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(dealsFilePath));
+
+            HashSet<string> dealPlayerIds = dealPlayers?.Info
+                 .Select(info => PlayerIdRegex().Match(info))
+                 .Where(match => match.Success)
+                 .Select(match => match.Groups[1].Value)
+                 .ToHashSet() ?? [];
+
+            if (dealPlayerIds.Count == 0)
                 return;
-
-            HashSet<string> lines = [.. File.ReadAllLines(filePath).Where(line => !line.Contains($"playerId={playerId}"))];
-
-            File.WriteAllLines(filePath, lines);
-        }
-
-        /// <summary>
-        /// Removes all processed player IDs that are present in today's deal players file
-        /// </summary>
-        public static void RemoveDealPlayersFromProcessedFile(string filePath)
-        {
-            if (!File.Exists(filePath))
-                return;
-
-            string[] playerIds = File.ReadAllLines(filePath);
-            HashSet<string> dealPlayerIds = [];
-
-            foreach (string playerId in playerIds)
-            {
-                Match playerMatch = PlayerIdRegex().Match(playerId);
-                if (playerMatch.Success)
-                    dealPlayerIds.Add(playerMatch.Groups[1].Value);
-            }
 
             string processedFilePath = GetTodaysProcessedPlayersFilePath();
-            ProcessedPlayers processedPlayers = LoadFileData<ProcessedPlayers>(processedFilePath);
-            processedPlayers.Ids ??= [];
-            bool updated = false;
+            ProcessedPlayers? processedPlayers = JsonConvert.DeserializeObject<ProcessedPlayers>(File.ReadAllText(processedFilePath));
 
-            foreach (string playerId in dealPlayerIds)
-            {
-                if (processedPlayers.Ids.Remove(playerId))
-                    updated = true;
-            }
+            bool anyRemoved = processedPlayers?.Ids?.RemoveWhere(id => dealPlayerIds.Contains(id)) > 0;
 
-            if (updated)
+            if (anyRemoved)
                 File.WriteAllText(processedFilePath, JsonConvert.SerializeObject(processedPlayers, Formatting.Indented));
         }
     }
