@@ -11,10 +11,12 @@ namespace HattrickTransfersScraper
     {
         private static readonly OSPlatform[] _supportedOSPlatforms = [OSPlatform.Windows, OSPlatform.Linux];
 
-        public static void AddServices(this IServiceCollection serviceCollection, Settings settings)
+        internal static void AddServices(this IServiceCollection serviceCollection, Settings settings)
         {
             ConfigureSerilog(settings);
             serviceCollection.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
+
+            serviceCollection.AddSingleton<HattrickService>();
         }
 
         /// <summary>

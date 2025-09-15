@@ -9,6 +9,6 @@
             Input
         }
 
-        public string Locator { get; } = locator;
+        internal string Locator { get; } = locator;
     }
 }

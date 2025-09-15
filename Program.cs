@@ -13,8 +13,8 @@ namespace HattrickTransfersScraper
         {
             Settings settings = Helpers.LoadFileData<Settings>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json"));
             SearchFilters searchFilters = Helpers.LoadFileData<SearchFilters>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "searchFilter.json"));
-            ProcessedPlayers processedPlayers = Helpers.LoadFileData<ProcessedPlayers>(Helpers.GetTodaysProcessedPlayersFilePath());
-            DealPlayers dealPlayers = Helpers.LoadFileData<DealPlayers>(Helpers.GetTodaysDealPlayersFilePath());
+            _ = Helpers.LoadFileData<ProcessedPlayers>(Helpers.GetTodaysProcessedPlayersFilePath());
+            _ = Helpers.LoadFileData<DealPlayers>(Helpers.GetTodaysDealPlayersFilePath());
 
             CultureInfo.DefaultThreadCurrentCulture = new(settings.Logs.FormatProviderCulture);
             CultureInfo.DefaultThreadCurrentUICulture = new(settings.Logs.FormatProviderCulture);
@@ -23,6 +23,7 @@ namespace HattrickTransfersScraper
             serviceCollection.AddServices(settings);
             ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
             ILogger<Program> logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+            HattrickService hattrickService = serviceProvider.GetRequiredService<HattrickService>();
 
             try
             {
@@ -36,23 +37,20 @@ namespace HattrickTransfersScraper
                     }
                 });
 
-                Helpers.RemoveDealPlayersFromProcessedFile();
-
-                IPage page = await Helpers.LoginHattrickAsync(browser, settings.LoginName, settings.LoginPassword);
-                string subdomain = page.Url.Split('.')[0].Replace("https://", "");
+                (IPage page, string subdomain) = await hattrickService.LoginHattrickAsync(browser, settings.LoginName, settings.LoginPassword);
 
                 foreach (SearchFilter filter in searchFilters.Filters)
                 {
-                    await Helpers.ApplyFilterAndSearchAsync(page, filter, subdomain);
-                    HashSet<string> playersLinks = await Helpers.CollectTodayPlayersLinksAsync(page);
+                    await hattrickService.ApplyFilterAndSearchAsync(page, subdomain, filter);
+                    HashSet<string> playersLinks = await hattrickService.CollectTodayPlayersLinksAsync(page, filter);
 
                     foreach (string playerLink in playersLinks)
-                        await Helpers.ProcessPlayerAsync(page, subdomain, playerLink, logger);
+                        await hattrickService.ProcessPlayerAsync(page, subdomain, playerLink, logger);
                 }
 
                 await browser.CloseAsync();
 
-                Helpers.DeduplicateCleanupAndSortDealsFile();
+                Helpers.DeduplicateCleanupAndSortDealsFile(logger);
             }
             catch (Exception ex)
             {
