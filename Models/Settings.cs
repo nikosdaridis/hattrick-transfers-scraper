@@ -6,7 +6,21 @@ namespace HattrickTransfersScraper.Models
     {
         public string LoginName { get; init; } = string.Empty;
         public string LoginPassword { get; init; } = string.Empty;
+        public int MinimumMedianForDeal { get; init; } = 40000;
+        public DealRule[] DealRules { get; init; } =
+            [
+            new() { UpperMedianLimit  = 100000, ProfitFactor  = 3 },
+            new() { UpperMedianLimit  = 500000, ProfitFactor  = 2 },
+            new() { UpperMedianLimit  = null, ProfitFactor  = 1.5 }
+            ];
+
         public SerilogConfig Logs { get; init; } = new();
+
+        internal sealed class DealRule
+        {
+            public int? UpperMedianLimit { get; init; }
+            public double ProfitFactor { get; init; }
+        }
 
         internal sealed class SerilogConfig
         {

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using HattrickTransfersScraper.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using Newtonsoft.Json;
 using System.Reflection;
@@ -103,6 +104,8 @@ namespace HattrickTransfersScraper
         {
             HashSet<string> playerLinks = [];
 
+            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(page.Locator("#mainBody h1", new() { HasTextString = "Search Result" })).ToBeVisibleAsync());
+
             await CollectFromCurrentPage(1);
 
             IReadOnlyList<ILocator> pageNumbers = await page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper a.page[href]").AllAsync();
@@ -119,9 +122,9 @@ namespace HattrickTransfersScraper
                     async () =>
                     {
                         await pageLink.ClickAsync();
-                        await Assertions.Expect(pagerLocator).ToHaveTextAsync(new Regex(@$"Displaying page {pageNumber} of \d+"), new() { Timeout = 2000 });
+                        await Assertions.Expect(pagerLocator).ToHaveTextAsync(new Regex(@$"Displaying page {pageNumber} of"), new() { Timeout = 2000 });
                     },
-                    $"Click page link and wait for Displaying page {pageNumber} of \\d+");
+                    $"Click page link and wait for 'Displaying page {pageNumber} of'");
 
                 await CollectFromCurrentPage(pageNumber);
             }
@@ -135,7 +138,11 @@ namespace HattrickTransfersScraper
             /// </summary>
             async Task CollectFromCurrentPage(int? pageNumber)
             {
-                await Helpers.RetryAssertionAsync(logger, Assertions.Expect(page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper")).ToBeVisibleAsync());
+                if (await page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper").CountAsync() == 0)
+                {
+                    Helpers.LogAndPrint(logger, LogLevel.Warning, "No players found for filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore }));
+                    return;
+                }
 
                 IReadOnlyList<ILocator> playersInfo = await page.Locator("div.transferPlayerInfo").AllAsync();
                 int collectedPlayersCount = 0;
@@ -173,7 +180,7 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Processes a player: gets price, deadline, median value and decides if it's a deal
         /// </summary>
-        internal async Task ProcessPlayerAsync(IPage page, string subdomain, string playerLink, ILogger<Program> logger)
+        internal async Task ProcessPlayerAsync(IPage page, string subdomain, string playerLink, ILogger<Program> logger, Settings settings)
         {
             await Helpers.RetryGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/{playerLink}", WaitUntilState.DOMContentLoaded);
 
@@ -202,16 +209,9 @@ namespace HattrickTransfersScraper
             string medianValueText = await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").TextContentAsync() ?? string.Empty;
             int medianValue = int.Parse(new string([.. Helpers.PriceRegex().Match(medianValueText).Value.Where(char.IsDigit)]));
 
-            double scaleFactor = medianValue switch
-            {
-                < 20000 => 10,
-                < 50000 => 4,
-                < 100000 => 3,
-                < 500000 => 2,
-                _ => 1.5
-            };
+            double profitFactor = Helpers.GetProfitFactor(medianValue);
 
-            if (medianValue > 20000 && price * scaleFactor < medianValue)
+            if (medianValue > settings.MinimumMedianForDeal && price * profitFactor < medianValue)
                 Helpers.AddPlayerToDealsFile(playerId, deadline, price, medianValue);
             else
                 Helpers.RemovePlayerFromDealsFile(playerId);

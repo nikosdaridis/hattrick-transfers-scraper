@@ -45,7 +45,7 @@ namespace HattrickTransfersScraper
                     HashSet<string> playersLinks = await hattrickService.CollectTodayPlayersLinksAsync(page, filter);
 
                     foreach (string playerLink in playersLinks)
-                        await hattrickService.ProcessPlayerAsync(page, subdomain, playerLink, logger);
+                        await hattrickService.ProcessPlayerAsync(page, subdomain, playerLink, logger, settings);
                 }
 
                 await browser.CloseAsync();

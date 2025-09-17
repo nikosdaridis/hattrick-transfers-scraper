@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using static HattrickTransfersScraper.Models.Settings;
 
 namespace HattrickTransfersScraper
 {
@@ -13,10 +14,10 @@ namespace HattrickTransfersScraper
         [GeneratedRegex(@"playerId=(\d+)", RegexOptions.Compiled)]
         internal static partial Regex PlayerIdRegex();
 
-        [GeneratedRegex(@"Deadline\s*(\d{1,2}/\d{1,2}/\d{4} \d{1,2}:\d{2}(?::\d{2})? [AP]M)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"Deadline\s*(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
         internal static partial Regex DeadlineRegex();
 
-        [GeneratedRegex(@"Timestamp\s+([0-9]{1,2}/[0-9]{1,2}/[0-9]{4}\s+[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"Timestamp\s+(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
         internal static partial Regex TimestampRegex();
 
         [GeneratedRegex(@"\d[\d\s]*", RegexOptions.Compiled)]
@@ -187,7 +188,7 @@ namespace HattrickTransfersScraper
 
             DealPlayers dealPlayers = LoadFileData<DealPlayers>(filePath);
 
-            dealPlayers.Info.Add($"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price: {price:N0} | Median: {medianValue:N0} | Timestamp {DateTime.Now}");
+            dealPlayers.Info.Add($"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price {price:N0} | Median {medianValue:N0} | Timestamp {DateTime.Now}");
 
             File.WriteAllText(filePath, JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
         }
@@ -310,6 +311,18 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
+        /// Gets the profit factor based on the player's median value
+        /// </summary>
+        internal static double GetProfitFactor(double medianValue)
+        {
+            foreach (DealRule dealRule in _settings.DealRules)
+                if (dealRule.UpperMedianLimit.HasValue && medianValue < dealRule.UpperMedianLimit.Value)
+                    return dealRule.ProfitFactor;
+
+            return _settings.DealRules.FirstOrDefault(r => r.UpperMedianLimit is null)?.ProfitFactor ?? 1.5;
+        }
+
+        /// <summary>
         /// Retries Playwright goto action
         /// </summary>
         internal static Task RetryGotoAsync(ILogger? logger, IPage page, string url, WaitUntilState waitUntil, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
@@ -365,7 +378,7 @@ namespace HattrickTransfersScraper
                 }
                 catch (PlaywrightException ex)
                 {
-                    LogAndPrint(logger, LogLevel.Warning, $"{actionName} failed (attempt {attempt}/{maxAttempts})");
+                    LogAndPrint(logger, LogLevel.Warning, $"{actionName} timed out on attempt {attempt}/{maxAttempts}");
 
                     if (attempt > 3)
                         LogAndPrint(logger, LogLevel.Warning, "Error: {0}", ex.Message);
