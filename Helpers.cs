@@ -23,6 +23,9 @@ namespace HattrickTransfersScraper
         [GeneratedRegex(@"\d[\d\s]*", RegexOptions.Compiled)]
         internal static partial Regex PriceRegex();
 
+        [GeneratedRegex(@"([\d\s\u00A0]+)\s*€?", RegexOptions.Compiled)]
+        internal static partial Regex WeeklyWageRegex();
+
         internal static readonly Settings _settings = LoadFileData<Settings>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json"));
 
         internal static readonly OSPlatform _currentPlatform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -165,9 +168,6 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal static void RemovePlayerFromDealsFile(string? playerId)
         {
-            if (string.IsNullOrWhiteSpace(playerId))
-                return;
-
             DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(GetTodaysDealPlayersFilePath()));
 
             bool playerRemoved = dealPlayers?.Info.RemoveWhere(info => PlayerIdRegex().Match(info) is Match match && match.Success && match.Groups[1].Value == playerId) > 0;
@@ -179,7 +179,7 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Adds a player's deal info to today's deals file
         /// </summary>
-        internal static void AddPlayerToDealsFile(string? playerId, DateTime? deadline, int price, int medianValue)
+        internal static void AddPlayerToDealsFile(string? playerId, decimal weeklyWage, DateTime? deadline, int price, int medianValue)
         {
             if (string.IsNullOrWhiteSpace(playerId) || !deadline.HasValue)
                 return;
@@ -188,7 +188,7 @@ namespace HattrickTransfersScraper
 
             DealPlayers dealPlayers = LoadFileData<DealPlayers>(filePath);
 
-            dealPlayers.Info.Add($"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price {price:N0} | Median {medianValue:N0} | Timestamp {DateTime.Now}");
+            dealPlayers.Info.Add($"https://hattrick.org/goto.ashx?path=/Club/Players/Player.aspx?playerId={playerId} | Deadline {deadline} | Price {price:N0} | Wage {weeklyWage:N0} | Median {medianValue:N0} | Timestamp {DateTime.Now}");
 
             File.WriteAllText(filePath, JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
         }
@@ -225,7 +225,48 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Gets the highest bid or asking price of the player from their page
+        /// Gets the weekly wage of the player
+        /// </summary>
+        internal static async Task<int> GetWeeklyPlayerWageAsync(IPage page, ILogger? logger)
+        {
+            ILocator wageRowLocator = page.Locator("div.transferPlayerInformation tr:has(td.right:has-text('Wage')) td[colspan='2']");
+            await RetryAssertionAsync(logger, Assertions.Expect(wageRowLocator).ToBeVisibleAsync());
+
+            if (await wageRowLocator.CountAsync() == 1)
+            {
+                string wageText = await wageRowLocator.First.TextContentAsync() ?? string.Empty;
+
+                Match match = WeeklyWageRegex().Match(wageText);
+                if (match.Success && int.TryParse(match.Groups[1].Value.Replace("\u00A0", "").Replace(" ", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out int wage))
+                    return wage;
+            }
+
+            LogAndPrint(logger, LogLevel.Warning, "Could not determine wage for player at {0}", page.Url);
+            return 0;
+        }
+
+        /// <summary>
+        /// Gets the deadline of the player
+        /// </summary>
+        internal static async Task<DateTime?> GetPlayerDeadlineAsync(IPage page, ILogger? logger)
+        {
+            ILocator deadlineLocator = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid p:has-text('Deadline')");
+            await RetryAssertionAsync(logger, Assertions.Expect(deadlineLocator).ToBeVisibleAsync());
+
+            if (await deadlineLocator.CountAsync() == 1)
+            {
+                string deadlineText = await deadlineLocator.First.TextContentAsync() ?? string.Empty;
+                string cleaned = deadlineText.Replace("Deadline:", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+                if (DateTime.TryParseExact(cleaned, "d-M-yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDeadline))
+                    return parsedDeadline;
+            }
+
+            LogAndPrint(logger, LogLevel.Warning, "Could not determine deadline for player at {0}", page.Url);
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the highest bid or asking price of the player
         /// </summary>
         internal static async Task<int> GetPlayerPriceAsync(IPage page, ILogger? logger)
         {
@@ -251,23 +292,40 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Gets the deadline of the player from their page
+        /// Gets the median value of the player
         /// </summary>
-        internal static async Task<DateTime?> GetPlayerDeadlineAsync(IPage page, ILogger? logger)
+        internal static async Task<int> GetMedianValueAsync(IPage page, ILogger? logger)
         {
-            ILocator deadlineLocator = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid p:has-text('Deadline')");
-            await RetryAssertionAsync(logger, Assertions.Expect(deadlineLocator).ToBeVisibleAsync());
+            ILocator transferCompareButton = page.Locator("text=Transfer Compare");
+            await RetryAssertionAsync(logger, Assertions.Expect(transferCompareButton).ToBeVisibleAsync());
+            await RetryClickAsync(logger, transferCompareButton);
+            await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
 
-            if (await deadlineLocator.CountAsync() == 1)
+            if (await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").CountAsync() != 1)
             {
-                string deadlineText = await deadlineLocator.First.TextContentAsync() ?? string.Empty;
-                string cleaned = deadlineText.Replace("Deadline:", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
-                if (DateTime.TryParseExact(cleaned, "d-M-yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDeadline))
-                    return parsedDeadline;
+                await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
+                return 0;
             }
 
-            LogAndPrint(logger, LogLevel.Warning, "Could not determine deadline for player at {0}", page.Url);
-            return null;
+            ILocator medianLocator = page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid");
+            await RetryAssertionAsync(logger, Assertions.Expect(medianLocator).ToBeVisibleAsync());
+
+            string medianValueText = await medianLocator.First.TextContentAsync() ?? string.Empty;
+
+            Match match = PriceRegex().Match(medianValueText);
+            if (!match.Success)
+            {
+                LogAndPrint(logger, LogLevel.Warning, "Could not parse median value text at {0}", page.Url);
+                return 0;
+            }
+
+            string digitsOnly = new([.. match.Value.Where(char.IsDigit)]);
+
+            if (int.TryParse(digitsOnly, NumberStyles.Integer, CultureInfo.InvariantCulture, out int medianValue))
+                return medianValue;
+
+            LogAndPrint(logger, LogLevel.Warning, "Could not convert median value text at {0}", page.Url);
+            return 0;
         }
 
         /// <summary>

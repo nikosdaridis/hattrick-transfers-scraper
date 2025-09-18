@@ -178,7 +178,7 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Processes a player: gets price, deadline, median value and decides if it's a deal
+        /// Processes a player: gets weekly wage, deadline, price, median value and decides if it's a deal
         /// </summary>
         internal async Task ProcessPlayerAsync(IPage page, string subdomain, string playerLink, ILogger<Program> logger, Settings settings)
         {
@@ -190,29 +190,17 @@ namespace HattrickTransfersScraper
 
             ILocator injuryIcon = page.Locator("i.icon-injury");
             if (await injuryIcon.CountAsync() > 0)
-                return;
+                Helpers.RemovePlayerFromDealsFile(playerId);
 
-            int price = await Helpers.GetPlayerPriceAsync(page, logger);
+            int weeklyWage = await Helpers.GetWeeklyPlayerWageAsync(page, logger);
             DateTime? deadline = await Helpers.GetPlayerDeadlineAsync(page, logger);
-
-            ILocator transferCompareButton = page.Locator("text=Transfer Compare");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(transferCompareButton).ToBeVisibleAsync());
-            await Helpers.RetryClickAsync(logger, transferCompareButton);
-            await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
-
-            if (await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").CountAsync() != 1)
-            {
-                await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
-                return;
-            }
-
-            string medianValueText = await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").TextContentAsync() ?? string.Empty;
-            int medianValue = int.Parse(new string([.. Helpers.PriceRegex().Match(medianValueText).Value.Where(char.IsDigit)]));
+            int price = await Helpers.GetPlayerPriceAsync(page, logger);
+            int medianValue = await Helpers.GetMedianValueAsync(page, logger);
 
             double profitFactor = Helpers.GetProfitFactor(medianValue);
 
-            if (medianValue > settings.MinimumMedianForDeal && price * profitFactor < medianValue)
-                Helpers.AddPlayerToDealsFile(playerId, deadline, price, medianValue);
+            if (medianValue > settings.MinimumMedianForDeal && (price + weeklyWage) * profitFactor < medianValue)
+                Helpers.AddPlayerToDealsFile(playerId, weeklyWage, deadline, price, medianValue);
             else
                 Helpers.RemovePlayerFromDealsFile(playerId);
         }
