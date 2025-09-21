@@ -10,7 +10,6 @@ using static HattrickTransfersScraper.Models.SearchFilters;
 
 namespace HattrickTransfersScraper
 {
-
     internal class HattrickService(ILogger<HattrickService> logger)
     {
         private static readonly JsonSerializerSettings _logSerializerSettings = new()
@@ -78,10 +77,6 @@ namespace HattrickTransfersScraper
 
             foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                string? value = property.GetValue(filter).GetStringValue();
-                if (string.IsNullOrWhiteSpace(value))
-                    continue;
-
                 LocatorAttribute? locatorAttribute = property.GetCustomAttribute<LocatorAttribute>();
                 if (locatorAttribute is null)
                     continue;
@@ -89,12 +84,24 @@ namespace HattrickTransfersScraper
                 ILocator locatorElement = page.Locator(locatorAttribute.Locator);
                 await Helpers.RetryAssertionAsync(logger, Assertions.Expect(locatorElement).ToBeVisibleAsync());
 
-                await (locatorAttribute.Locator switch
+                Task actionTask = (property.GetValue(filter), property.PropertyType, locatorAttribute.Locator) switch
                 {
-                    string s when s.StartsWith("select") => Helpers.RetrySelectAsync(logger, locatorElement, value),
-                    string s when s.StartsWith("input") => Helpers.RetryFillAsync(logger, locatorElement, value),
+                    // Clicks Specialty icon if true, supports bool
+                    (bool value, Type type, string locator) when type == typeof(bool?) && value && locator.StartsWith("label:has(i") =>
+                        Helpers.RetryClickAsync(logger, locatorElement),
+
+                    // Selects value in dropdown, supports enums and strings
+                    (object value, Type type, string locator) when locator.StartsWith("select") && !string.IsNullOrWhiteSpace(value?.GetStringValue()) =>
+                        Helpers.RetrySelectAsync(logger, locatorElement, value.GetStringValue()!),
+
+                    // Fills input field, supports strings
+                    (string value, Type type, string locator) when type == typeof(string) && !string.IsNullOrWhiteSpace(value) && locator.StartsWith("input") =>
+                        Helpers.RetryFillAsync(logger, locatorElement, value),
+
                     _ => Task.CompletedTask
-                });
+                };
+
+                await actionTask;
 
                 await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             }

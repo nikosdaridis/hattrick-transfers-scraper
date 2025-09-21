@@ -115,6 +115,30 @@ namespace HattrickTransfersScraper.Models
             [Locator("select[id='ctl00_ctl00_CPContent_CPMain_ddlSkill4Max']")]
             public string? Skill4Max { get; init; }
 
+            [Locator("label:has(i.icon-speciality-1)")]
+            public bool? TechnicalSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-2)")]
+            public bool? QuickSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-3)")]
+            public bool? PowerfulSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-4)")]
+            public bool? UnpredictableSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-5)")]
+            public bool? HeadSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-6)")]
+            public bool? ResilientSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-8)")]
+            public bool? SupportSpecialty { get; init; }
+
+            [Locator("label:has(i.icon-speciality-0)")]
+            public bool? NoSpecialty { get; init; }
+
             [Locator("input[id='ctl00_ctl00_CPContent_CPMain_txtBidMax']")]
             public string? BidMax { get; init; }
 
@@ -220,13 +244,13 @@ namespace HattrickTransfersScraper.Models
         CostaRica = 77,
         Croatia = 42,
         Cuba = 93,
-        Curaçao = 178,
+        Curacao = 178,
         Cyprus = 82,
         Czechia = 46,
-        CôteDIvoire = 132,
+        CoteDIvoire = 132,
         Denmark = 10,
         DominicanRepublic = 83,
-        DR_Congo = 181,
+        DRCongo = 181,
         Ecuador = 68,
         Egypt = 32,
         ElSalvador = 96,
