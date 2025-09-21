@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -9,8 +10,15 @@ using static HattrickTransfersScraper.Models.SearchFilters;
 
 namespace HattrickTransfersScraper
 {
+
     internal class HattrickService(ILogger<HattrickService> logger)
     {
+        private static readonly JsonSerializerSettings _logSerializerSettings = new()
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            Converters = { new StringEnumConverter() }
+        };
+
         /// <summary>
         /// Logs into Hattrick and returns the logged-in page
         /// </summary>
@@ -57,18 +65,20 @@ namespace HattrickTransfersScraper
         internal async Task ApplyFilterAndSearchAsync(IPage page, string subdomain, SearchFilter filter)
         {
             await Helpers.RetryGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/World/Transfers/", WaitUntilState.DOMContentLoaded);
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
             ILocator clearFilterButton = page.Locator("a[id='ctl00_ctl00_CPContent_CPMain_butClear']");
             await Helpers.RetryAssertionAsync(logger, Assertions.Expect(clearFilterButton).ToBeVisibleAsync());
             await Helpers.RetryClickAsync(logger, clearFilterButton);
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
 
+            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             ILocator skill4Selector = page.Locator("#ctl00_ctl00_CPContent_CPMain_ddlSkill4");
             await Helpers.RetryAssertionAsync(logger, Assertions.Expect(skill4Selector).ToBeVisibleAsync());
 
             foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                string? value = property.GetValue(filter) as string;
+                string? value = property.GetValue(filter).GetStringValue();
                 if (string.IsNullOrWhiteSpace(value))
                     continue;
 
@@ -89,12 +99,11 @@ namespace HattrickTransfersScraper
                 await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             }
 
-            await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             ILocator searchButton = page.Locator("#ctl00_ctl00_CPContent_CPMain_butSearch");
             await Helpers.RetryAssertionAsync(logger, Assertions.Expect(searchButton).ToBeVisibleAsync());
             await Helpers.RetryClickAsync(logger, searchButton);
 
-            Helpers.LogAndPrint(logger, LogLevel.Information, "Searching filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore }));
+            Helpers.LogAndPrint(logger, LogLevel.Information, "Searching filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, _logSerializerSettings));
         }
 
         /// <summary>
@@ -140,7 +149,7 @@ namespace HattrickTransfersScraper
             {
                 if (await page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper").CountAsync() == 0)
                 {
-                    Helpers.LogAndPrint(logger, LogLevel.Warning, "No players found for filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, new JsonSerializerSettings() { NullValueHandling = NullValueHandling.Ignore }));
+                    Helpers.LogAndPrint(logger, LogLevel.Warning, "No players found for filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, _logSerializerSettings));
                     return;
                 }
 

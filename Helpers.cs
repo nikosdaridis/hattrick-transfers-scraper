@@ -45,7 +45,10 @@ namespace HattrickTransfersScraper
 
                 if (string.IsNullOrEmpty(jsonContent))
                 {
-                    jsonContent = JsonConvert.SerializeObject(defaultModel, Formatting.Indented);
+                    jsonContent = JsonConvert.SerializeObject(defaultModel, Formatting.Indented, new JsonSerializerSettings
+                    {
+                        Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() }
+                    });
                     File.WriteAllText(filePath, jsonContent);
                     return defaultModel;
                 }
@@ -71,7 +74,10 @@ namespace HattrickTransfersScraper
                     }
                 }
 
-                string defaultJson = JsonConvert.SerializeObject(defaultModel, Formatting.Indented);
+                string defaultJson = JsonConvert.SerializeObject(defaultModel, Formatting.Indented, new JsonSerializerSettings
+                {
+                    Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() }
+                });
                 File.WriteAllText(filePath, defaultJson);
                 return defaultModel;
             }
