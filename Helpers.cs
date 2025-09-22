@@ -335,9 +335,9 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Deduplicates, cleans up expired deals and sorts the deals file by deadline
+        /// Cleans up today's deals file, removes expired deals and keeps only the latest entry per player
         /// </summary>
-        internal static void DeduplicateCleanupAndSortDealsFile(ILogger? logger)
+        internal static void CleanupAndSortDealsFile(ILogger? logger)
         {
             string filePath = GetTodaysDealPlayersFilePath();
 
@@ -358,7 +358,7 @@ namespace HattrickTransfersScraper
                     DateTime? deadline = ParseDeadline(deadlineMatch.Groups[1].Value);
                     DateTime? timestamp = ParseLogTime(timestampMatch.Groups[1].Value);
 
-                    if (deadline.HasValue && timestamp.HasValue && deadline.Value > DateTime.Now)
+                    if (deadline.HasValue && timestamp.HasValue && deadline.Value > DateTime.Now && timestamp.Value.AddHours(1) > DateTime.Now)
                         if (!playersMap.TryGetValue(playerId, out (DateTime deadline, DateTime timestamp, string info) existing) || timestamp.Value > existing.timestamp)
                             playersMap[playerId] = (deadline.Value, timestamp.Value, playerInfo);
                 }

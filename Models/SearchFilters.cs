@@ -25,6 +25,14 @@ namespace HattrickTransfersScraper.Models
                     Skill4 = null,
                     Skill4Min = null,
                     Skill4Max = null,
+                    TechnicalSpecialty = null,
+                    QuickSpecialty = null,
+                    PowerfulSpecialty = null,
+                    UnpredictableSpecialty = null,
+                    HeadSpecialty = null,
+                    ResilientSpecialty = null,
+                    SupportSpecialty = null,
+                    NoSpecialty = null,
                     BidMax = "100000",
                     BornIn = null,
                     Continent = null,
@@ -53,6 +61,14 @@ namespace HattrickTransfersScraper.Models
                     Skill4 = null,
                     Skill4Min = null,
                     Skill4Max = null,
+                    TechnicalSpecialty = null,
+                    QuickSpecialty = null,
+                    PowerfulSpecialty = null,
+                    UnpredictableSpecialty = null,
+                    HeadSpecialty = null,
+                    ResilientSpecialty = null,
+                    SupportSpecialty = null,
+                    NoSpecialty = null,
                     BidMax = "100000",
                     BornIn = null,
                     Continent = null,
@@ -178,14 +194,10 @@ namespace HattrickTransfersScraper.Models
             if (propertyValue is null)
                 return null;
 
-            if (propertyValue is string s)
-                return s;
+            if (propertyValue is string stringValue)
+                return stringValue;
 
-            if (propertyValue.GetType().IsEnum)
-                return Convert.ToInt32(propertyValue).ToString();
-
-            Type type = propertyValue.GetType();
-            if (Nullable.GetUnderlyingType(type)?.IsEnum == true)
+            if (propertyValue.GetType().IsEnum || Nullable.GetUnderlyingType(propertyValue.GetType())?.IsEnum == true)
                 return Convert.ToInt32(propertyValue).ToString();
 
             return propertyValue.ToString();

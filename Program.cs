@@ -50,7 +50,7 @@ namespace HattrickTransfersScraper
 
                 await browser.CloseAsync();
 
-                Helpers.DeduplicateCleanupAndSortDealsFile(logger);
+                Helpers.CleanupAndSortDealsFile(logger);
             }
             catch (Exception ex)
             {

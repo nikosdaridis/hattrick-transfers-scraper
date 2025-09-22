@@ -75,7 +75,7 @@ namespace HattrickTransfersScraper
             ILocator skill4Selector = page.Locator("#ctl00_ctl00_CPContent_CPMain_ddlSkill4");
             await Helpers.RetryAssertionAsync(logger, Assertions.Expect(skill4Selector).ToBeVisibleAsync());
 
-            foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(property => property.GetValue(filter) is not null))
             {
                 LocatorAttribute? locatorAttribute = property.GetCustomAttribute<LocatorAttribute>();
                 if (locatorAttribute is null)
@@ -206,7 +206,7 @@ namespace HattrickTransfersScraper
 
             ILocator injuryIcon = page.Locator("i.icon-injury");
             if (await injuryIcon.CountAsync() > 0)
-                Helpers.RemovePlayerFromDealsFile(playerId);
+                return;
 
             int weeklyWage = await Helpers.GetWeeklyPlayerWageAsync(page, logger);
             DateTime? deadline = await Helpers.GetPlayerDeadlineAsync(page, logger);
