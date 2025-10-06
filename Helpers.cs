@@ -256,13 +256,14 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal static async Task<DateTime?> GetPlayerDeadlineAsync(IPage page, ILogger? logger)
         {
-            ILocator deadlineLocator = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid p:has-text('Deadline')");
+            ILocator deadlineLocator = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid > .alert > p:has-text('Deadline')").First;
             await RetryAssertionAsync(logger, Assertions.Expect(deadlineLocator).ToBeVisibleAsync());
 
             if (await deadlineLocator.CountAsync() == 1)
             {
                 string deadlineText = await deadlineLocator.First.TextContentAsync() ?? string.Empty;
                 string cleaned = deadlineText.Replace("Deadline:", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+
                 if (DateTime.TryParseExact(cleaned, "d-M-yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDeadline))
                     return parsedDeadline;
             }
@@ -302,7 +303,7 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal static async Task<int> GetMedianValueAsync(IPage page, ILogger? logger)
         {
-            ILocator transferCompareButton = page.Locator("text=Transfer Compare");
+            ILocator transferCompareButton = page.Locator("div.boxBody a:has-text('Transfer Compare')");
             await RetryAssertionAsync(logger, Assertions.Expect(transferCompareButton).ToBeVisibleAsync());
             await RetryClickAsync(logger, transferCompareButton);
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
@@ -358,7 +359,7 @@ namespace HattrickTransfersScraper
                     DateTime? deadline = ParseDeadline(deadlineMatch.Groups[1].Value);
                     DateTime? timestamp = ParseLogTime(timestampMatch.Groups[1].Value);
 
-                    if (deadline.HasValue && timestamp.HasValue && deadline.Value > DateTime.Now && timestamp.Value.AddHours(1) > DateTime.Now)
+                    if (deadline.HasValue && timestamp.HasValue && deadline.Value > DateTime.Now && timestamp.Value.AddHours(2) > DateTime.Now)
                         if (!playersMap.TryGetValue(playerId, out (DateTime deadline, DateTime timestamp, string info) existing) || timestamp.Value > existing.timestamp)
                             playersMap[playerId] = (deadline.Value, timestamp.Value, playerInfo);
                 }
@@ -368,8 +369,7 @@ namespace HattrickTransfersScraper
 
             File.WriteAllText(filePath, JsonConvert.SerializeObject(new DealPlayers { Info = sortedPlayersInfo }, Formatting.Indented));
 
-            LogAndPrint(logger, LogLevel.Information, "Deduplicated and cleaned up deals file, removed {0}, kept {1}",
-                dealPlayers.Info.Count - sortedPlayersInfo.Count, sortedPlayersInfo.Count);
+            LogAndPrint(logger, LogLevel.Information, "Cleaned up deals file, removed {0}, kept {1}", dealPlayers.Info.Count - sortedPlayersInfo.Count, sortedPlayersInfo.Count);
 
             RemoveDealPlayersFromProcessedFile(logger);
         }

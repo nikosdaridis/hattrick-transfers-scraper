@@ -27,8 +27,8 @@ namespace HattrickTransfersScraper
             {
                 ViewportSize = new ViewportSize
                 {
-                    Width = Random.Shared.Next(1200, 1920),
-                    Height = Random.Shared.Next(800, 1080)
+                    Width = Random.Shared.Next(1200, 1400),
+                    Height = Random.Shared.Next(1400, 1800)
                 },
                 Locale = "en-US"
             });
