@@ -184,7 +184,15 @@ namespace HattrickTransfersScraper
                         ? await deadlineLocator.First.TextContentAsync()
                         : null;
 
-                    if (!string.IsNullOrWhiteSpace(deadlineText) && deadlineText.Contains("today", StringComparison.OrdinalIgnoreCase))
+                    if (string.IsNullOrWhiteSpace(deadlineText))
+                        continue;
+
+                    DateTime? deadline = Helpers.ParseDeadline(deadlineText!, logger);
+                    if (deadline is null)
+                        continue;
+
+                    double remainingHours = (deadline.Value - DateTime.Now).TotalHours;
+                    if (remainingHours > 0 && remainingHours < Helpers._settings.DeadlineWindowHours)
                         if (playerLinks.Add(href))
                             collectedPlayersCount++;
                 }

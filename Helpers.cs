@@ -14,8 +14,14 @@ namespace HattrickTransfersScraper
         [GeneratedRegex(@"playerId=(\d+)", RegexOptions.Compiled)]
         internal static partial Regex PlayerIdRegex();
 
-        [GeneratedRegex(@"Deadline\s*(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
-        internal static partial Regex DeadlineRegex();
+        [GeneratedRegex(@"^\s*today\s+(\d{1,2}:\d{2})\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+        internal static partial Regex TodayDeadlineRegex();
+
+        [GeneratedRegex(@"^\s*tomorrow\s+(\d{1,2}:\d{2})\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+        internal static partial Regex TomorrowDeadlineRegex();
+
+        [GeneratedRegex(@"(?:Deadline\s*)?(\d{1,2}[-/]\d{1,2}[-/]\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+        internal static partial Regex DateTimeDeadlineRegex();
 
         [GeneratedRegex(@"Timestamp\s+(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
         internal static partial Regex TimestampRegex();
@@ -154,13 +160,52 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Parses deadline string into DateTime
         /// </summary>
-        internal static DateTime? ParseDeadline(string deadlineText)
+        internal static DateTime? ParseDeadline(string deadlineText, ILogger? logger = null)
         {
-            if (DateTime.TryParseExact(deadlineText, "M/d/yyyy h:mm:ss tt", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime deadline) ||
-                DateTime.TryParseExact(deadlineText, "M/d/yyyy h:mm tt", CultureInfo.InvariantCulture, DateTimeStyles.None, out deadline))
-                return deadline;
+            deadlineText = deadlineText.Trim();
 
-            return null;
+            Match todayMatch = TodayDeadlineRegex().Match(deadlineText);
+            Match tomorrowMatch = TomorrowDeadlineRegex().Match(deadlineText);
+            Match dateTimeMatch = DateTimeDeadlineRegex().Match(deadlineText);
+
+            DateTime? result = (todayMatch.Success, tomorrowMatch.Success, dateTimeMatch.Success) switch
+            {
+                (true, _, _) => TryParseTime(todayMatch.Groups[1].Value, out DateTime todayTime)
+                    ? DateTime.Today.Add(todayTime.TimeOfDay)
+                    : null,
+
+                (_, true, _) => TryParseTime(tomorrowMatch.Groups[1].Value, out DateTime tomorrowTime)
+                    ? DateTime.Today.AddDays(1).Add(tomorrowTime.TimeOfDay)
+                    : null,
+
+                (_, _, true) => TryParseDate(dateTimeMatch.Groups[1].Value, out DateTime dateTime)
+                    ? dateTime
+                    : null,
+
+                _ => null
+            };
+
+            if (result is null)
+                LogAndPrint(logger, LogLevel.Warning, "Could not parse deadline text '{0}'", deadlineText);
+
+            return result;
+
+            static bool TryParseTime(string timeText, out DateTime result) =>
+                DateTime.TryParse(timeText, CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
+
+            static bool TryParseDate(string dateText, out DateTime result) =>
+                DateTime.TryParseExact(
+                    dateText,
+                    [
+                        "M-d-yyyy H:mm",
+                        "M-d-yyyy H:mm:ss",
+                        "M/d/yyyy h:mm tt",
+                        "M/d/yyyy h:mm:ss tt"
+                    ],
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out result
+                );
         }
 
         /// <summary>
@@ -350,7 +395,7 @@ namespace HattrickTransfersScraper
             foreach (string playerInfo in dealPlayers.Info)
             {
                 Match playerIdMatch = PlayerIdRegex().Match(playerInfo);
-                Match deadlineMatch = DeadlineRegex().Match(playerInfo);
+                Match deadlineMatch = DateTimeDeadlineRegex().Match(playerInfo);
                 Match timestampMatch = TimestampRegex().Match(playerInfo);
 
                 if (playerIdMatch.Success && deadlineMatch.Success && timestampMatch.Success)
