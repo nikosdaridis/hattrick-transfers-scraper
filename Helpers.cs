@@ -113,22 +113,16 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Gets today's log file path
+        /// Gets processed players file path
         /// </summary>
-        internal static string GetTodaysLogFilePath() =>
-            GetTodaysFilePath($"{DateTime.Now:yyyyMMdd}.log");
+        internal static string GetProcessedPlayersFilePath() =>
+            GetTodaysFilePath($"processed.json");
 
         /// <summary>
-        /// Gets today's processed players file path
+        /// Gets deal players file path
         /// </summary>
-        internal static string GetTodaysProcessedPlayersFilePath() =>
-            GetTodaysFilePath($"{DateTime.Now:yyyyMMdd}processed.json");
-
-        /// <summary>
-        /// Gets today's deal players file path
-        /// </summary>
-        internal static string GetTodaysDealPlayersFilePath() =>
-            GetTodaysFilePath($"{DateTime.Now:yyyyMMdd}deals.json");
+        internal static string GetDealPlayersFilePath() =>
+            GetTodaysFilePath($"deals.json");
 
         /// <summary>
         /// Combines base log directory with today's date and given file name
@@ -140,7 +134,7 @@ namespace HattrickTransfersScraper
         /// Checks if a player ID has already been processed
         /// </summary>
         internal static bool IsPlayerIdProcessed(string playerId) =>
-            (LoadFileData<ProcessedPlayers>(GetTodaysProcessedPlayersFilePath())).Ids?.Contains(playerId) ?? false;
+            (LoadFileData<ProcessedPlayers>(GetProcessedPlayersFilePath())).Ids?.Contains(playerId) ?? false;
 
         /// <summary>
         /// Marks a player ID as processed and appends it to the file
@@ -150,11 +144,11 @@ namespace HattrickTransfersScraper
             if (string.IsNullOrWhiteSpace(playerId))
                 return;
 
-            ProcessedPlayers processed = LoadFileData<ProcessedPlayers>(GetTodaysProcessedPlayersFilePath());
+            ProcessedPlayers processed = LoadFileData<ProcessedPlayers>(GetProcessedPlayersFilePath());
             processed.Ids ??= [];
 
             if (processed.Ids.Add(playerId))
-                File.WriteAllText(GetTodaysProcessedPlayersFilePath(), JsonConvert.SerializeObject(processed, Formatting.Indented));
+                File.WriteAllText(GetProcessedPlayersFilePath(), JsonConvert.SerializeObject(processed, Formatting.Indented));
         }
 
         /// <summary>
@@ -215,27 +209,27 @@ namespace HattrickTransfersScraper
             DateTime.TryParse(input, out DateTime datetime) ? datetime : null;
 
         /// <summary>
-        /// Checks if a player ID is in today's deals file and removes it if found
+        /// Checks if a player ID is in deals file and removes it if found
         /// </summary>
         internal static void RemovePlayerFromDealsFile(string? playerId)
         {
-            DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(GetTodaysDealPlayersFilePath()));
+            DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(GetDealPlayersFilePath()));
 
             bool playerRemoved = dealPlayers?.Info.RemoveWhere(info => PlayerIdRegex().Match(info) is Match match && match.Success && match.Groups[1].Value == playerId) > 0;
 
             if (playerRemoved)
-                File.WriteAllText(GetTodaysDealPlayersFilePath(), JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
+                File.WriteAllText(GetDealPlayersFilePath(), JsonConvert.SerializeObject(dealPlayers, Formatting.Indented));
         }
 
         /// <summary>
-        /// Adds a player's deal info to today's deals file
+        /// Adds a player's deal info to deals file
         /// </summary>
         internal static void AddPlayerToDealsFile(string? playerId, decimal weeklyWage, DateTime? deadline, int price, int medianValue)
         {
             if (string.IsNullOrWhiteSpace(playerId) || !deadline.HasValue)
                 return;
 
-            string filePath = GetTodaysDealPlayersFilePath();
+            string filePath = GetDealPlayersFilePath();
 
             DealPlayers dealPlayers = LoadFileData<DealPlayers>(filePath);
 
@@ -245,11 +239,11 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Removes players from today's processed file if they are present in today's deals file
+        /// Removes players from processed file if they are present in deals file
         /// </summary>
         internal static void RemoveDealPlayersFromProcessedFile(ILogger? logger)
         {
-            string dealsFilePath = GetTodaysDealPlayersFilePath();
+            string dealsFilePath = GetDealPlayersFilePath();
 
             DealPlayers? dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(File.ReadAllText(dealsFilePath));
 
@@ -262,7 +256,7 @@ namespace HattrickTransfersScraper
             if (dealPlayerIds.Count == 0)
                 return;
 
-            string processedFilePath = GetTodaysProcessedPlayersFilePath();
+            string processedFilePath = GetProcessedPlayersFilePath();
             ProcessedPlayers? processedPlayers = JsonConvert.DeserializeObject<ProcessedPlayers>(File.ReadAllText(processedFilePath));
 
             bool anyRemoved = processedPlayers?.Ids?.RemoveWhere(id => dealPlayerIds.Contains(id)) > 0;
@@ -381,11 +375,11 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Cleans up today's deals file, removes expired deals and keeps only the latest entry per player
+        /// Cleans up deals file, removes expired deals and keeps only the latest entry per player
         /// </summary>
         internal static void CleanupAndSortDealsFile(ILogger? logger)
         {
-            string filePath = GetTodaysDealPlayersFilePath();
+            string filePath = GetDealPlayersFilePath();
 
             string[] json = File.ReadAllLines(filePath);
             DealPlayers dealPlayers = JsonConvert.DeserializeObject<DealPlayers>(string.Join(Environment.NewLine, json)) ?? new();

@@ -114,9 +114,9 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Collects links of players whose transfer deadline is today and not yet processed
+        /// Collects links of players whose transfer deadline is within the specified window
         /// </summary>
-        internal async Task<HashSet<string>> CollectTodayPlayersLinksAsync(IPage page, SearchFilter filter)
+        internal async Task<HashSet<string>> CollectPlayersLinksAsync(IPage page, SearchFilter filter)
         {
             HashSet<string> playerLinks = [];
 

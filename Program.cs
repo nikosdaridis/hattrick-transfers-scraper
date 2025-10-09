@@ -13,8 +13,8 @@ namespace HattrickTransfersScraper
         {
             Settings settings = Helpers.LoadFileData<Settings>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json"));
             SearchFilters searchFilters = Helpers.LoadFileData<SearchFilters>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "searchFilter.json"));
-            _ = Helpers.LoadFileData<ProcessedPlayers>(Helpers.GetTodaysProcessedPlayersFilePath());
-            _ = Helpers.LoadFileData<DealPlayers>(Helpers.GetTodaysDealPlayersFilePath());
+            _ = Helpers.LoadFileData<ProcessedPlayers>(Helpers.GetProcessedPlayersFilePath());
+            _ = Helpers.LoadFileData<DealPlayers>(Helpers.GetDealPlayersFilePath());
 
             CultureInfo.DefaultThreadCurrentCulture = new(settings.Logs.FormatProviderCulture);
             CultureInfo.DefaultThreadCurrentUICulture = new(settings.Logs.FormatProviderCulture);
@@ -42,7 +42,7 @@ namespace HattrickTransfersScraper
                 foreach (SearchFilter filter in searchFilters.Filters)
                 {
                     await hattrickService.ApplyFilterAndSearchAsync(page, subdomain, filter);
-                    HashSet<string> playersLinks = await hattrickService.CollectTodayPlayersLinksAsync(page, filter);
+                    HashSet<string> playersLinks = await hattrickService.CollectPlayersLinksAsync(page, filter);
 
                     foreach (string playerLink in playersLinks)
                         await hattrickService.ProcessPlayerAsync(page, subdomain, playerLink, logger, settings);
