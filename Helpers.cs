@@ -200,32 +200,53 @@ namespace HattrickTransfersScraper
                 string[] formats = _settings?.DateFormatOption switch
                 {
                     DateFormat.DayMonthYear =>
-                   [
-                       "dd-MM-yyyy HH:mm",
+                    [
+                        "dd-MM-yyyy HH:mm",
                         "d-M-yyyy H:mm",
                         "dd-MM-yyyy HH:mm:ss",
                         "d-M-yyyy H:mm:ss",
                         "dd/MM/yyyy HH:mm",
-                        "d/M/yyyy H:mm"
-                   ],
+                        "d/M/yyyy H:mm",
+                        "dd/MM/yyyy HH:mm:ss",
+                        "d/M/yyyy H:mm:ss",
+
+                        "dd/MM/yyyy h:mm tt",
+                        "d/M/yyyy h:mm tt",
+                        "dd/MM/yyyy hh:mm tt",
+                        "d/M/yyyy hh:mm tt",
+                        "dd/MM/yyyy h:mm:ss tt",
+                        "d/M/yyyy h:mm:ss tt",
+                        "dd/MM/yyyy hh:mm:ss tt",
+                        "d/M/yyyy hh:mm:ss tt"
+                    ],
 
                     DateFormat.MonthDayYear =>
                     [
                         "M-d-yyyy H:mm",
                         "M-d-yyyy HH:mm",
                         "M-d-yyyy H:mm:ss",
+                        "M/d/yyyy H:mm",
+                        "M/d/yyyy HH:mm",
+                        "M/d/yyyy H:mm:ss",
+
                         "M/d/yyyy h:mm tt",
-                        "M/d/yyyy hh:mm tt"
+                        "M/d/yyyy hh:mm tt",
+                        "M/d/yyyy h:mm:ss tt",
+                        "M/d/yyyy hh:mm:ss tt",
+                        "M-d-yyyy h:mm tt",
+                        "M-d-yyyy hh:mm tt",
+                        "M-d-yyyy h:mm:ss tt",
+                        "M-d-yyyy hh:mm:ss tt"
                     ],
 
-                    _ => throw new InvalidOperationException("Unknown date format specified in settings. Has to be either DayMonthYear or MonthDayYear.")
+                    _ => throw new InvalidOperationException("Unknown DateFormat in settings. Has to be DayMonthYear or MonthDayYear.")
                 };
 
                 return DateTime.TryParseExact(
                     dateText.Trim(),
                     formats,
                     CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
                     out result
                 );
             }
