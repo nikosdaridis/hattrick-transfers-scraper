@@ -27,17 +27,9 @@ namespace HattrickTransfersScraper
 
             try
             {
-                await using IBrowser browser = await (await Playwright.CreateAsync()).Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-                {
-                    Headless = false,
-                    Args = new[] {
-                        "--disable-blink-features=AutomationControlled",
-                        "--no-sandbox",
-                        "--disable-infobars"
-                    }
-                });
-
-                (IPage page, string subdomain) = await hattrickService.LoginHattrickAsync(browser, settings.LoginName, settings.LoginPassword);
+                IBrowser browser = await hattrickService.LaunchBrowserAsync();
+                IPage page = await hattrickService.CreatePageAsync(browser);
+                string subdomain = await hattrickService.LoginHattrickAsync(page);
 
                 foreach (SearchFilter filter in searchFilters.Filters)
                 {

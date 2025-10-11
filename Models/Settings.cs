@@ -6,7 +6,7 @@ namespace HattrickTransfersScraper.Models
     {
         public string LoginName { get; init; } = string.Empty;
         public string LoginPassword { get; init; } = string.Empty;
-        public int DeadlineWindowHours { get; init; } = 24;
+        public int DeadlineWindowHours { get; init; } = 12;
         public int MinimumMedianForDeal { get; init; } = 40000;
         public DealRule[] DealRules { get; init; } =
             [

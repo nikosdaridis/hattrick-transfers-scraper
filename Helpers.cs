@@ -39,7 +39,7 @@ namespace HattrickTransfersScraper
                : OSPlatform.Linux;
 
         /// <summary>
-        /// Loads data from file or backups current file and creates a default file
+        /// Loads JSON file data into model, creates file with default model if not found or invalid
         /// </summary>
         internal static T LoadFileData<T>(string filePath, ILogger? logger = null) where T : new()
         {
@@ -47,45 +47,53 @@ namespace HattrickTransfersScraper
 
             try
             {
-                string jsonContent = File.ReadAllText(filePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
-                if (string.IsNullOrEmpty(jsonContent))
+                if (!File.Exists(filePath))
                 {
-                    jsonContent = JsonConvert.SerializeObject(defaultModel, Formatting.Indented, new JsonSerializerSettings
-                    {
-                        Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() }
-                    });
-                    File.WriteAllText(filePath, jsonContent);
+                    SaveDefault(filePath, defaultModel);
                     return defaultModel;
                 }
 
-                return JsonConvert.DeserializeObject<T>(jsonContent) ?? defaultModel;
+                string json = File.ReadAllText(filePath);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    SaveDefault(filePath, defaultModel);
+                    return defaultModel;
+                }
+
+                return JsonConvert.DeserializeObject<T>(json) ?? defaultModel;
             }
             catch (Exception ex)
             {
-                LogAndPrint(logger, LogLevel.Error, "Invalid Json - Error reading file '{0}': {1}", filePath, ex.Message);
+                LogAndPrint(logger, LogLevel.Error, "Invalid JSON - Error reading '{0}': {1}", filePath, ex.Message);
 
                 if (File.Exists(filePath))
                 {
                     try
                     {
-                        string backupFilePath = Path.ChangeExtension(filePath, $".invalid.{DateTime.Now:MMddHHmmss}.json");
-
-                        File.Move(filePath, backupFilePath);
-                        LogAndPrint(logger, LogLevel.Warning, "Existing file backed up as {0}", backupFilePath);
+                        string backup = Path.ChangeExtension(filePath, $".invalid.{DateTime.Now:MMddHHmmss}.json");
+                        File.Move(filePath, backup);
+                        LogAndPrint(logger, LogLevel.Warning, "Backed up invalid file as {0}", backup);
                     }
                     catch (Exception backupEx)
                     {
-                        LogAndPrint(logger, LogLevel.Error, "Failed to back up the existing file: {0}", backupEx.Message);
+                        LogAndPrint(logger, LogLevel.Error, "Failed to back up invalid file: {0}", backupEx.Message);
                     }
                 }
 
-                string defaultJson = JsonConvert.SerializeObject(defaultModel, Formatting.Indented, new JsonSerializerSettings
+                SaveDefault(filePath, defaultModel);
+                return defaultModel;
+            }
+
+            // Saves the default model to the path
+            static void SaveDefault(string path, T model)
+            {
+                string json = JsonConvert.SerializeObject(model, Formatting.Indented, new JsonSerializerSettings
                 {
                     Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() }
                 });
-                File.WriteAllText(filePath, defaultJson);
-                return defaultModel;
+                File.WriteAllText(path, json);
             }
         }
 
@@ -275,7 +283,7 @@ namespace HattrickTransfersScraper
         internal static async Task<int> GetWeeklyPlayerWageAsync(IPage page, ILogger? logger)
         {
             ILocator wageRowLocator = page.Locator("div.transferPlayerInformation tr:has(td.right:has-text('Wage')) td[colspan='2']");
-            await RetryAssertionAsync(logger, Assertions.Expect(wageRowLocator).ToBeVisibleAsync());
+            await HandleAssertionAsync(logger, Assertions.Expect(wageRowLocator).ToBeVisibleAsync());
 
             if (await wageRowLocator.CountAsync() == 1)
             {
@@ -296,7 +304,7 @@ namespace HattrickTransfersScraper
         internal static async Task<DateTime?> GetPlayerDeadlineAsync(IPage page, ILogger? logger)
         {
             ILocator deadlineLocator = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid > .alert > p:has-text('Deadline')").First;
-            await RetryAssertionAsync(logger, Assertions.Expect(deadlineLocator).ToBeVisibleAsync());
+            await HandleAssertionAsync(logger, Assertions.Expect(deadlineLocator).ToBeVisibleAsync());
 
             if (await deadlineLocator.CountAsync() == 1)
             {
@@ -317,7 +325,7 @@ namespace HattrickTransfersScraper
         internal static async Task<int> GetPlayerPriceAsync(IPage page, ILogger? logger)
         {
             ILocator askingPrice = page.Locator("#ctl00_ctl00_CPContent_CPMain_updBid p:has-text('Asking Price')");
-            await RetryAssertionAsync(logger, Assertions.Expect(askingPrice).ToBeVisibleAsync());
+            await HandleAssertionAsync(logger, Assertions.Expect(askingPrice).ToBeVisibleAsync());
 
             if (await page.Locator("#ctl00_ctl00_CPContent_CPMain_pnlHighestBid p").CountAsync() == 1)
             {
@@ -343,8 +351,8 @@ namespace HattrickTransfersScraper
         internal static async Task<int> GetMedianValueAsync(IPage page, ILogger? logger)
         {
             ILocator transferCompareButton = page.Locator("div.boxBody a:has-text('Transfer Compare')");
-            await RetryAssertionAsync(logger, Assertions.Expect(transferCompareButton).ToBeVisibleAsync());
-            await RetryClickAsync(logger, transferCompareButton);
+            await HandleAssertionAsync(logger, Assertions.Expect(transferCompareButton).ToBeVisibleAsync());
+            await HandleClickAsync(logger, transferCompareButton);
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
 
             if (await page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid").CountAsync() != 1)
@@ -354,7 +362,7 @@ namespace HattrickTransfersScraper
             }
 
             ILocator medianLocator = page.Locator("tr:has(th:text('Median')) th.transfer-compare-bid");
-            await RetryAssertionAsync(logger, Assertions.Expect(medianLocator).ToBeVisibleAsync());
+            await HandleAssertionAsync(logger, Assertions.Expect(medianLocator).ToBeVisibleAsync());
 
             string medianValueText = await medianLocator.First.TextContentAsync() ?? string.Empty;
 
@@ -426,51 +434,51 @@ namespace HattrickTransfersScraper
         }
 
         /// <summary>
-        /// Retries Playwright goto action
+        /// Handles Playwright goto with retries
         /// </summary>
-        internal static Task RetryGotoAsync(ILogger? logger, IPage page, string url, WaitUntilState waitUntil, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => page.GotoAsync(url, new PageGotoOptions { WaitUntil = waitUntil }), $"Navigate to '{url}'", maxAttempts, delayBetweenAttempts);
+        internal static Task HandleGotoAsync(ILogger? logger, IPage page, string url, WaitUntilState waitUntil, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => page.GotoAsync(url, new PageGotoOptions { WaitUntil = waitUntil }), $"Navigate to '{url}'", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright fill action
+        /// Handles Playwright fill with retries
         /// </summary>
-        internal static Task RetryFillAsync(ILogger? logger, ILocator locator, string text, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => locator.FillAsync(text), $"Fill locator with '{text}'", maxAttempts, delayBetweenAttempts);
+        internal static Task HandleFillAsync(ILogger? logger, ILocator locator, string text, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => locator.FillAsync(text), $"Fill locator with '{text}'", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright select action
+        ///  Handles Playwright select with retries
         /// </summary>
-        internal static Task RetrySelectAsync(ILogger? logger, ILocator locator, string value, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => locator.SelectOptionAsync(value), $"Select '{value}' on locator", maxAttempts, delayBetweenAttempts);
+        internal static Task HandleSelectAsync(ILogger? logger, ILocator locator, string value, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => locator.SelectOptionAsync(value), $"Select '{value}' on locator", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright click action
+        /// Handles Playwright click with retries
         /// </summary>
-        internal static Task RetryClickAsync(ILogger? logger, ILocator locator, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => locator.ClickAsync(), "Click", maxAttempts, delayBetweenAttempts);
+        internal static Task HandleClickAsync(ILogger? logger, ILocator locator, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => locator.ClickAsync(), "Click", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright assertion action
+        /// Handles Playwright assertion with retries
         /// </summary>
-        internal static Task RetryAssertionAsync(ILogger? logger, Task assertion, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => assertion, "Assertion", maxAttempts, delayBetweenAttempts);
+        internal static Task HandleAssertionAsync(ILogger? logger, Task assertion, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => assertion, "Assertion", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright press action
+        /// Handles Playwright press with retries
         /// </summary>
-        internal static Task RetryPressAsync(ILogger? logger, ILocator locator, string key, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, () => locator.PressAsync(key), $"Press '{key}' on locator", maxAttempts, delayBetweenAttempts);
+        internal static Task HandlePressAsync(ILogger? logger, ILocator locator, string key, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, () => locator.PressAsync(key), $"Press '{key}' on locator", maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries Playwright function
+        /// Handles Playwright function with retries
         /// </summary>
-        internal static Task RetryFunctionAsync(ILogger? logger, Func<Task> function, string functionName, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
-            RetryPlaywrightActionAsync(logger, function, functionName, maxAttempts, delayBetweenAttempts);
+        internal static Task HandleFunctionAsync(ILogger? logger, Func<Task> function, string functionName, int maxAttempts = 9, int delayBetweenAttempts = 1000) =>
+            HandlePlaywrightActionAsync(logger, function, functionName, maxAttempts, delayBetweenAttempts);
 
         /// <summary>
-        /// Retries failed Playwright action with max attempts and delay between attempts
+        /// Handles Playwright action with retries
         /// </summary>
-        private static async Task RetryPlaywrightActionAsync(ILogger? logger, Func<Task> action, string actionName, int maxAttempts, int delayBetweenAttempts)
+        private static async Task HandlePlaywrightActionAsync(ILogger? logger, Func<Task> action, string actionName, int maxAttempts, int delayBetweenAttempts)
         {
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {

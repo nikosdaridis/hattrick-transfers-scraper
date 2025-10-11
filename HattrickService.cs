@@ -19,43 +19,61 @@ namespace HattrickTransfersScraper
         };
 
         /// <summary>
-        /// Logs into Hattrick and returns the logged-in page
+        /// Launches a new browser instance
         /// </summary>
-        internal async Task<(IPage page, string subdomain)> LoginHattrickAsync(IBrowser browser, string loginName, string password)
-        {
-            IBrowserContext context = await browser.NewContextAsync(new BrowserNewContextOptions
+        internal async Task<IBrowser> LaunchBrowserAsync() =>
+            await (await Playwright.CreateAsync()).Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {
-                ViewportSize = new ViewportSize
+                Headless = false,
+                Args = new[]
                 {
-                    Width = Random.Shared.Next(1200, 1400),
-                    Height = Random.Shared.Next(1400, 1800)
-                },
-                Locale = "en-US"
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-infobars"
+                }
             });
 
-            IPage page = await context.NewPageAsync();
-            await Helpers.RetryGotoAsync(logger, page, "https://hattrick.org/", WaitUntilState.NetworkIdle);
+        /// <summary>
+        /// Creates a new page with random viewport size
+        /// </summary>
+        internal async Task<IPage> CreatePageAsync(IBrowser browser) =>
+           await (await browser.NewContextAsync(new BrowserNewContextOptions
+           {
+               ViewportSize = new ViewportSize
+               {
+                   Width = Random.Shared.Next(1200, 1400),
+                   Height = Random.Shared.Next(1400, 1800)
+               },
+               Locale = "en-US"
+           })).NewPageAsync();
+
+        /// <summary>
+        /// Logs in to Hattrick and returns the subdomain of the logged-in user
+        /// </summary>
+        internal async Task<string> LoginHattrickAsync(IPage page)
+        {
+            await Helpers.HandleGotoAsync(logger, page, "https://hattrick.org/", WaitUntilState.NetworkIdle);
 
             ILocator cookiesRejectButton = page.Locator("button[data-cky-tag='reject-button']");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(cookiesRejectButton).ToBeVisibleAsync());
-            await Helpers.RetryClickAsync(logger, cookiesRejectButton);
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(cookiesRejectButton).ToBeVisibleAsync());
+            await Helpers.HandleClickAsync(logger, cookiesRejectButton);
 
             ILocator loginButton = page.Locator("div.landing-form.presign-up p.extra-message a:has-text('Log In')");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(loginButton).ToBeVisibleAsync());
-            await Helpers.RetryClickAsync(logger, loginButton);
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(loginButton).ToBeVisibleAsync());
+            await Helpers.HandleClickAsync(logger, loginButton);
 
             ILocator usernameInput = page.Locator("input[id='inputLoginname']");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(usernameInput).ToBeVisibleAsync());
-            await Helpers.RetryFillAsync(logger, usernameInput, loginName);
-            await Helpers.RetryFillAsync(logger, page.Locator("input[id='inputPassword']"), password);
-            await Helpers.RetryPressAsync(logger, page.Locator("input[id='inputPassword']"), "Enter");
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(usernameInput).ToBeVisibleAsync());
+            await Helpers.HandleFillAsync(logger, usernameInput, Helpers._settings.LoginName);
+            await Helpers.HandleFillAsync(logger, page.Locator("input[id='inputPassword']"), Helpers._settings.LoginPassword);
+            await Helpers.HandlePressAsync(logger, page.Locator("input[id='inputPassword']"), "Enter");
 
             ILocator myOfficeText = page.Locator("div.boxHead a:has-text('My Club')");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(myOfficeText).ToBeVisibleAsync());
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(myOfficeText).ToBeVisibleAsync());
 
-            Helpers.LogAndPrint(logger, LogLevel.Information, "Logged in as {0}", loginName);
+            Helpers.LogAndPrint(logger, LogLevel.Information, "Logged in as {0}", Helpers._settings.LoginName);
 
-            return (page, page.Url.Split('.')[0].Replace("https://", ""));
+            return page.Url.Split('.')[0].Replace("https://", "");
         }
 
         /// <summary>
@@ -63,17 +81,17 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal async Task ApplyFilterAndSearchAsync(IPage page, string subdomain, SearchFilter filter)
         {
-            await Helpers.RetryGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/World/Transfers/", WaitUntilState.DOMContentLoaded);
+            await Helpers.HandleGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/World/Transfers/", WaitUntilState.DOMContentLoaded);
             await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
 
             ILocator clearFilterButton = page.Locator("a[id='ctl00_ctl00_CPContent_CPMain_butClear']");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(clearFilterButton).ToBeVisibleAsync());
-            await Helpers.RetryClickAsync(logger, clearFilterButton);
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(clearFilterButton).ToBeVisibleAsync());
+            await Helpers.HandleClickAsync(logger, clearFilterButton);
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
 
             await page.WaitForTimeoutAsync(Random.Shared.Next(200, 400));
             ILocator skill4Selector = page.Locator("#ctl00_ctl00_CPContent_CPMain_ddlSkill4");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(skill4Selector).ToBeVisibleAsync());
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(skill4Selector).ToBeVisibleAsync());
 
             foreach (PropertyInfo property in typeof(SearchFilter).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(property => property.GetValue(filter) is not null))
             {
@@ -82,21 +100,21 @@ namespace HattrickTransfersScraper
                     continue;
 
                 ILocator locatorElement = page.Locator(locatorAttribute.Locator);
-                await Helpers.RetryAssertionAsync(logger, Assertions.Expect(locatorElement).ToBeVisibleAsync());
+                await Helpers.HandleAssertionAsync(logger, Assertions.Expect(locatorElement).ToBeVisibleAsync());
 
                 Task actionTask = (property.GetValue(filter), property.PropertyType, locatorAttribute.Locator) switch
                 {
                     // Clicks Specialty icon if true, supports bool
                     (bool value, Type type, string locator) when type == typeof(bool?) && value && locator.StartsWith("label:has(i") =>
-                        Helpers.RetryClickAsync(logger, locatorElement),
+                        Helpers.HandleClickAsync(logger, locatorElement),
 
                     // Selects value in dropdown, supports enums and strings
                     (object value, Type type, string locator) when locator.StartsWith("select") && !string.IsNullOrWhiteSpace(value?.GetStringValue()) =>
-                        Helpers.RetrySelectAsync(logger, locatorElement, value.GetStringValue()!),
+                        Helpers.HandleSelectAsync(logger, locatorElement, value.GetStringValue()!),
 
                     // Fills input field, supports strings
                     (string value, Type type, string locator) when type == typeof(string) && !string.IsNullOrWhiteSpace(value) && locator.StartsWith("input") =>
-                        Helpers.RetryFillAsync(logger, locatorElement, value),
+                        Helpers.HandleFillAsync(logger, locatorElement, value),
 
                     _ => Task.CompletedTask
                 };
@@ -107,8 +125,8 @@ namespace HattrickTransfersScraper
             }
 
             ILocator searchButton = page.Locator("#ctl00_ctl00_CPContent_CPMain_butSearch");
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(searchButton).ToBeVisibleAsync());
-            await Helpers.RetryClickAsync(logger, searchButton);
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(searchButton).ToBeVisibleAsync());
+            await Helpers.HandleClickAsync(logger, searchButton);
 
             Helpers.LogAndPrint(logger, LogLevel.Information, "Searching filter: {0}", JsonConvert.SerializeObject(filter, Formatting.None, _logSerializerSettings));
         }
@@ -120,9 +138,9 @@ namespace HattrickTransfersScraper
         {
             HashSet<string> playerLinks = [];
 
-            await Helpers.RetryAssertionAsync(logger, Assertions.Expect(page.Locator("#mainBody h1", new() { HasTextString = "Search Result" })).ToBeVisibleAsync());
+            await Helpers.HandleAssertionAsync(logger, Assertions.Expect(page.Locator("#mainBody h1", new() { HasTextString = "Search Result" })).ToBeVisibleAsync());
 
-            await CollectFromCurrentPage(1);
+            await CollectFromCurrentPageAsync(1);
 
             IReadOnlyList<ILocator> pageNumbers = await page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper a.page[href]").AllAsync();
             foreach (ILocator pageLink in pageNumbers)
@@ -134,7 +152,7 @@ namespace HattrickTransfersScraper
 
                 ILocator pagerLocator = page.Locator("div.PagerRight_Default").First;
 
-                await Helpers.RetryFunctionAsync(logger,
+                await Helpers.HandleFunctionAsync(logger,
                     async () =>
                     {
                         await pageLink.ClickAsync();
@@ -142,7 +160,7 @@ namespace HattrickTransfersScraper
                     },
                     $"Click page link and wait for 'Displaying page {pageNumber} of'");
 
-                await CollectFromCurrentPage(pageNumber);
+                await CollectFromCurrentPageAsync(pageNumber);
             }
 
             Helpers.LogAndPrint(logger, LogLevel.Information, "Processing {0} players", playerLinks.Count);
@@ -152,7 +170,7 @@ namespace HattrickTransfersScraper
             /// <summary>
             /// Collects player links from the current page
             /// </summary>
-            async Task CollectFromCurrentPage(int? pageNumber)
+            async Task CollectFromCurrentPageAsync(int? pageNumber)
             {
                 if (await page.Locator("#ctl00_ctl00_CPContent_CPMain_ucPager_divWrapper").CountAsync() == 0)
                 {
@@ -206,7 +224,7 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal async Task ProcessPlayerAsync(IPage page, string subdomain, string playerLink, ILogger<Program> logger, Settings settings)
         {
-            await Helpers.RetryGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/{playerLink}", WaitUntilState.DOMContentLoaded);
+            await Helpers.HandleGotoAsync(logger, page, $"https://{subdomain}.hattrick.org/{playerLink}", WaitUntilState.DOMContentLoaded);
 
             string query = playerLink[(playerLink.IndexOf('?') + 1)..];
             string? playerId = HttpUtility.ParseQueryString(query)["playerId"];

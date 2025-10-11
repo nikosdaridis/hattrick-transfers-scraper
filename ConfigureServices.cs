@@ -11,6 +11,9 @@ namespace HattrickTransfersScraper
     {
         private static readonly OSPlatform[] _supportedOSPlatforms = [OSPlatform.Windows, OSPlatform.Linux];
 
+        /// <summary>
+        /// Adds services to the service collection
+        /// </summary>
         internal static void AddServices(this IServiceCollection serviceCollection, Settings settings)
         {
             ConfigureSerilog(settings);
