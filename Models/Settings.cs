@@ -1,4 +1,6 @@
-﻿using System.Runtime.InteropServices;
+﻿using Newtonsoft.Json.Converters;
+using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 
 namespace HattrickTransfersScraper.Models
 {
@@ -6,6 +8,7 @@ namespace HattrickTransfersScraper.Models
     {
         public string LoginName { get; init; } = string.Empty;
         public string LoginPassword { get; init; } = string.Empty;
+        public DateFormat DateFormatOption { get; init; } = DateFormat.DayMonthYear;
         public int DeadlineWindowHours { get; init; } = 12;
         public int MinimumMedianForDeal { get; init; } = 40000;
         public DealRule[] DealRules { get; init; } =
@@ -16,6 +19,13 @@ namespace HattrickTransfersScraper.Models
             ];
 
         public SerilogConfig Logs { get; init; } = new();
+
+        [JsonConverter(typeof(StringEnumConverter))]
+        public enum DateFormat
+        {
+            DayMonthYear,
+            MonthDayYear
+        }
 
         internal sealed class DealRule
         {

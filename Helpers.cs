@@ -195,19 +195,40 @@ namespace HattrickTransfersScraper
             static bool TryParseTime(string timeText, out DateTime result) =>
                 DateTime.TryParse(timeText, CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
 
-            static bool TryParseDate(string dateText, out DateTime result) =>
-                DateTime.TryParseExact(
-                    dateText,
+            static bool TryParseDate(string dateText, out DateTime result)
+            {
+                string[] formats = _settings?.DateFormatOption switch
+                {
+                    DateFormat.DayMonthYear =>
+                   [
+                       "dd-MM-yyyy HH:mm",
+                        "d-M-yyyy H:mm",
+                        "dd-MM-yyyy HH:mm:ss",
+                        "d-M-yyyy H:mm:ss",
+                        "dd/MM/yyyy HH:mm",
+                        "d/M/yyyy H:mm"
+                   ],
+
+                    DateFormat.MonthDayYear =>
                     [
                         "M-d-yyyy H:mm",
+                        "M-d-yyyy HH:mm",
                         "M-d-yyyy H:mm:ss",
                         "M/d/yyyy h:mm tt",
-                        "M/d/yyyy h:mm:ss tt"
+                        "M/d/yyyy hh:mm tt"
                     ],
+
+                    _ => throw new InvalidOperationException("Unknown date format specified in settings. Has to be either DayMonthYear or MonthDayYear.")
+                };
+
+                return DateTime.TryParseExact(
+                    dateText.Trim(),
+                    formats,
                     CultureInfo.InvariantCulture,
                     DateTimeStyles.None,
                     out result
                 );
+            }
         }
 
         /// <summary>
