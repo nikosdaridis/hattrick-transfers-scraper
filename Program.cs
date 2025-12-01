@@ -2,7 +2,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
-using System.Globalization;
 using static HattrickTransfersScraper.Models.SearchFilters;
 
 namespace HattrickTransfersScraper
@@ -15,9 +14,6 @@ namespace HattrickTransfersScraper
             SearchFilters searchFilters = Helpers.LoadFileData<SearchFilters>(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "searchFilter.json"));
             _ = Helpers.LoadFileData<ProcessedPlayers>(Helpers.GetProcessedPlayersFilePath());
             _ = Helpers.LoadFileData<DealPlayers>(Helpers.GetDealPlayersFilePath());
-
-            CultureInfo.DefaultThreadCurrentCulture = new(settings.Logs.FormatProviderCulture);
-            CultureInfo.DefaultThreadCurrentUICulture = new(settings.Logs.FormatProviderCulture);
 
             ServiceCollection serviceCollection = new();
             serviceCollection.AddServices(settings);

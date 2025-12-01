@@ -10,8 +10,10 @@ using static HattrickTransfersScraper.Models.SearchFilters;
 
 namespace HattrickTransfersScraper
 {
-    internal class HattrickService(ILogger<HattrickService> logger)
+    internal class HattrickService(ILogger<HattrickService> logger) : IDisposable
     {
+        private IPlaywright? _playwright;
+
         private static readonly JsonSerializerSettings _logSerializerSettings = new()
         {
             NullValueHandling = NullValueHandling.Ignore,
@@ -21,8 +23,10 @@ namespace HattrickTransfersScraper
         /// <summary>
         /// Launches a new browser instance
         /// </summary>
-        internal async Task<IBrowser> LaunchBrowserAsync() =>
-            await (await Playwright.CreateAsync()).Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        public async Task<IBrowser> LaunchBrowserAsync()
+        {
+            _playwright ??= await Playwright.CreateAsync();
+            return await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
             {
                 Headless = false,
                 Args = new[]
@@ -32,6 +36,7 @@ namespace HattrickTransfersScraper
                     "--disable-infobars"
                 }
             });
+        }
 
         /// <summary>
         /// Creates a new page with random viewport size
@@ -52,6 +57,7 @@ namespace HattrickTransfersScraper
         /// </summary>
         internal async Task<string> LoginHattrickAsync(IPage page)
         {
+            await Helpers.HandleGotoAsync(logger, page, "https://hattrick.org/", WaitUntilState.DOMContentLoaded);
             await Helpers.HandleGotoAsync(logger, page, "https://hattrick.org/", WaitUntilState.NetworkIdle);
 
             ILocator cookiesRejectButton = page.Locator("button[data-cky-tag='reject-button']");
@@ -248,6 +254,12 @@ namespace HattrickTransfersScraper
                 Helpers.AddPlayerToDealsFile(playerId, weeklyWage, deadline, price, medianValue);
             else
                 Helpers.RemovePlayerFromDealsFile(playerId);
+        }
+
+        public void Dispose()
+        {
+            _playwright?.Dispose();
+            _playwright = null;
         }
     }
 }

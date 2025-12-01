@@ -531,8 +531,8 @@ namespace HattrickTransfersScraper
                 }
                 catch (PlaywrightException ex)
                 {
-                    LogAndPrint(logger, LogLevel.Warning, $"{actionName} timed out on attempt {attempt}/{maxAttempts}");
-
+                    if (attempt > 1)
+                        LogAndPrint(logger, LogLevel.Warning, $"{actionName} timed out on attempt {attempt}/{maxAttempts}");
                     if (attempt > 3)
                         LogAndPrint(logger, LogLevel.Warning, "Error: {0}", ex.Message);
 
