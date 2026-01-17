@@ -9,6 +9,16 @@ A .NET 10 console application that searches for profitable player deals on [Hatt
 
 Hattrick Transfers Scraper automates the process of finding undervalued players in the Hattrick transfer market. By configuring search filters and deal rules, you can automatically scan for players whose asking price is significantly below their median market value.
 
+## How It Works
+
+1. **Browser Launch** - Playwright launches Chromium
+2. **Login** - Automated login to Hattrick with credentials from `settings.json`
+3. **Filter Application** - Dynamically apply search filters via `LocatorAttribute` mapping
+4. **Data Extraction** - Parses player information from transfer listing pages
+5. **Profit Calculation** - Compares median market value plus weekly wage against asking price using tiered rules
+6. **Deal Management** - Tracks qualifying deals and removes expired ones
+7. **Logging** - Logging to aid debugging and monitoring
+
 ## Features
 
 - **Configurable Search Filters** - Define multiple search criteria with 40+ filter options
@@ -29,7 +39,7 @@ Hattrick Transfers Scraper automates the process of finding undervalued players 
 ## Installation
 
 - **Clone the repository**
-- **Install Playwright browsers**
+- **Install Playwright chromium browser**
 - **Run project**
 
 ## Configuration
@@ -93,13 +103,13 @@ Two configuration files will be created in the project root directory:
 Deal rules are evaluated in order. Each rule specifies:
 
 - `UpperMedianLimit` - Maximum median value for this tier (null = unlimited)
-- `ProfitFactor` - Required ratio: (Median / Asking Price) must exceed this value
+- `ProfitFactor` - Required ratio: ((Median + Weekly Wage) / Asking Price) must exceed this value
 
 **Example:**
 
-- Median < 100,000: Must be 3x below asking price
-- Median < 500,000: Must be 2x below asking price
-- Median >= 500,000: Must be 1.5x below asking price
+- Median + Weekly Wage < 100,000: Must be 3x below asking price
+- Median + Weekly Wage < 500,000: Must be 2x below asking price
+- Median + Weekly Wage >= 500,000: Must be 1.5x below asking price
 
 ### 2. searchFilter.json
 
@@ -175,16 +185,6 @@ The application creates and manages two data files:
 | ---------------- | --------------------- | ------------------------------- |
 | `deals.json`     | `logs/deals.json`     | Current profitable deals        |
 | `processed.json` | `logs/processed.json` | Previously processed player IDs |
-
-## How It Works
-
-1. **Browser Launch** - Playwright launches Chromium
-2. **Login** - Automated login to Hattrick with credentials from `settings.json`
-3. **Filter Application** - Dynamically apply search filters via `LocatorAttribute` mapping
-4. **Data Extraction** - Parses player information from transfer listing pages
-5. **Profit Calculation** - Compares median market value against asking price using tiered rules
-6. **Deal Management** - Tracks qualifying deals and removes expired ones
-7. **Logging** - Logging to aid debugging and monitoring
 
 ## License
 
