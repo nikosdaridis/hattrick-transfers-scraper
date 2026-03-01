@@ -11,7 +11,7 @@ Hattrick Transfers Scraper automates the process of finding undervalued players 
 
 ## Demo
 
-![Demo](https://raw.githubusercontent.com/nikosdaridis/hattrick-transfers-scraper/main/demo.gif)
+![demo](https://github.com/user-attachments/assets/515600fa-1112-4347-89a7-184de64e04cf)
 
 ## How It Works
 
