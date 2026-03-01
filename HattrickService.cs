@@ -77,8 +77,6 @@ namespace HattrickTransfersScraper
             ILocator myOfficeText = page.Locator("div.boxHead a:has-text('My Club')");
             await Helpers.HandleAssertionAsync(logger, Assertions.Expect(myOfficeText).ToBeVisibleAsync());
 
-            Helpers.LogAndPrint(logger, LogLevel.Information, "Logged in as {0}", Helpers._settings.LoginName);
-
             return page.Url.Split('.')[0].Replace("https://", "");
         }
 
@@ -216,8 +214,6 @@ namespace HattrickTransfersScraper
                         continue;
 
                     double remainingHours = (deadline.Value - DateTime.Now).TotalHours;
-
-                    Helpers.LogAndPrint(logger, LogLevel.Debug, "PlayerId {0}, Deadline '{1}', parsed '{2}', remaining hours {3:N2}", playerId, deadlineText, deadline.Value.ToString("g"), remainingHours);
 
                     if (remainingHours > 0 && remainingHours < Helpers._settings.DeadlineWindowHours)
                         if (playerLinks.Add(href))

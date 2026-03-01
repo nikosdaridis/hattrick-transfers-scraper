@@ -9,6 +9,10 @@ A .NET 10 console application that searches for profitable player deals on [Hatt
 
 Hattrick Transfers Scraper automates the process of finding undervalued players in the Hattrick transfer market. By configuring search filters and deal rules, you can automatically scan for players whose asking price is significantly below their median market value.
 
+## Demo
+
+![Demo](https://raw.githubusercontent.com/nikosdaridis/hattrick-transfers-scraper/main/demo.gif)
+
 ## How It Works
 
 1. **Browser Launch** - Playwright launches Chromium
